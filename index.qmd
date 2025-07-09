@@ -1,0 +1,3 @@
+![Laboratório de Ultraestrutura Celular - prof. Dr. José Eduardo Serrão](www/WhatsApp Image 2025-07-09 at 16.06.50.jpeg){width="294"}\
+\
+Este caderno foi desenvolvido por Érika Carvalho e Julia Gonçalves como parte das atividades da disciplina FIP606 – Análise e Visualização de Dados, ministrada pelo professor Emerson M. Del Ponte. O material reúne conteúdos interdisciplinares voltados à aplicação de métodos estatísticos e técnicas de visualização de dados em diferentes áreas das ciências biológicas e agrárias, com ênfase na interpretação crítica e na comunicação eficaz dos resultados por meio de ferramentas como RStudio.

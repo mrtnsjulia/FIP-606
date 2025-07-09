@@ -1,0 +1,148 @@
+---
+title: "Aula 6"
+format: html
+editor: visual
+---
+
+## Aula 6
+
+```{r}
+library(MASS)
+insects <- InsectSprays
+
+m1 <- lm(count ~ spray, data = insects)
+
+library(DHARMa)
+plot(simulateResiduals(m1))
+
+
+#não atendeu ao pressuposto de homogeneidade então fizemos transformação dos dados primeiro por raiz quadrada. 
+
+m1 <- lm(sqrt(count) ~ spray, data = insects)
+m1
+library(DHARMa)
+plot(simulateResiduals(m1))
+
+#depois fizemos transformação por log - +1 para evitar log 0
+m1_log <- lm(log(count + 1) ~ spray, data = insects)
+m1_log
+
+library(DHARMa)
+plot(simulateResiduals(m1_log))
+
+
+boxcox(lm(insects$count + 0.1 ~ 1))
+b<- boxcox(lm(insects$count + 0.1 ~ 1))
+lambda <- b$x[which.max(b$y)]
+lambda
+
+library(tidyverse)
+insects <- insects |>
+  mutate(count2 = count^lambda-1/lambda) |>
+  mutate(count3 = sqrt(count))
+
+insects$count2<- (insects$count ^ lambda - 1) / lambda
+hist(insects$count2)
+```
+
+##### Aqui carregamos o conjunto de dados InsectSprays e ajustamos um modelo linear para verificar o efeito do tipo de inseticida sobre a contagem de insetos mortos. Em seguida, utilizamos o pacote DHARMa para avaliar os resíduos do modelo e verificamos possíveis desvios da normalidade. Depois aplicamos a transformação de Box-Cox, para melhorar a adequação do modelo e identificando o melhor valor de lambda. Também testamos a transformação por raiz quadrada para comparação.
+
+```{r}
+library(gsheet)
+
+estande <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?gid=401662555#gid=401662555")
+
+library(ggplot2)
+ estande |> ggplot(aes(trat, nplants)) + geom_point() + geom_smooth(method = "lm", se = FALSE) +
+   facet_wrap( ~ exp) +
+   theme_minimal()
+   
+```
+
+##### Aqui importamos e fizemos a visualização dos dados relacionados à emergência de plantas em função da porcentagem de inóculo nas sementes. utilizamos o ggplot2 para criar gráficos de dispersão entre o tratamento (trat) e o número de plantas emergidas (nplants), separando os gráficos por experimento (exp). Também adicionamos uma linha de tendência linear para facilitar a visualização do comportamento dos dados em cada experimento.
+
+##### 
+
+```{r}
+exp1 <- estande |>
+  filter(exp == 1)
+m_exp1 <- lm(nplants ~ trat, data = exp1)
+summary(m_exp1)
+
+exp2 <- estande |>
+  filter(exp == 2)
+m_exp2 <- lm(nplants ~ trat, data = exp2)
+summary(m_exp2)
+
+exp3 <- estande |>
+  filter(exp == 3)
+m_exp3 <- lm(nplants ~ trat, data = exp3)
+summary(m_exp3)
+```
+
+##### Aqui realizamos análises para cada um dos experimentos da planilha importada anteriormente. Filtramos os dados por experimento e ajustamos modelos lineares para avaliar a relação entre o percentual de inóculo (trat) e o número de plantas emergidas (nplants). Para cada experimento, usamos a função lm() e analisamos os resultados por meio do summary(), permitindo identificar a significância e o efeito do tratamento em cada caso específico.
+
+```{r}
+
+library(lme4)
+m_misto <- lmer(nplants ~ trat + (1 | exp/bloco), data = estande)
+summary(m_misto)
+confint(m_misto)
+car::Anova(m_misto)
+
+estande |>
+  ggplot(aes(trat, nplants, color = factor(exp))) +
+  geom_point()+
+  #geom_smooth(method = "lm", se = FALSE) +
+  geom_abline(intercept = 69.74, 
+              slope = -0.568, linewidth = 2) +
+  geom_abline(intercept = 43,
+              slope = -0.73, linetype ="dashed") +
+    geom_abline(intercept = 96,
+              slope = -0.40, linetype ="dashed")
+```
+
+##### Aqui realizamos uma análise com modelo misto para considerar variações entre experimentos e blocos. Fizemos isso ajustando um **modelo misto linear** com o pacote **lme4**, considerando o efeito fixo do tratamento (`trat`) e os efeitos aleatórios dos blocos dentro dos experimentos (`(1 | exp/bloco)`). Avaliamos o modelo com `summary()`, obtivemos os intervalos de confiança dos parâmetros com `confint()` e testamos a significância dos efeitos com a função `Anova()` do pacote **car**. Por fim, criamos um gráfico com os pontos dos dados coloridos por experimento e adicionamos retas com diferentes interceptos e inclinações para representar tendências gerais e específicas, comparando possíveis ajustes.
+
+```{r}
+library(gsheet)
+fungi <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?gid=465348652#gid=465348652")
+
+fungi |>
+  group_by(code, dose)  |>
+  summarise(germination = mean(germination)) |> 
+             ggplot(aes(dose, germination)) + geom_point() +
+  geom_line() +
+  facet_wrap(~ code)
+
+FGT43 <- fungi |>
+  group_by(code, dose) |>
+  summarise(germination = mean(germination)) |>
+  filter (code == "FGT43")
+
+library(drc)
+m43 <- drm(germination ~ dose, data = FGT43,
+           fct = LL.3())
+summary(m43)
+AIC(m43)
+plot(m43)
+ED(m43, 50)
+
+library(ec50estimator)
+df_ec50 = estimate_EC50(germination ~ dose,
+                        data = fungi,
+                        isolate_col = "code",
+                        strata_col = "state",
+                        interval = "delta",
+                        fct = drc :: LL.3())
+df_ec50 |>
+  ggplot(aes(reorder(ID, Estimate), Estimate)) +
+  geom_point()+
+  coord_flip()
+
+df_ec50 |>
+  ggplot(aes(x = Estimate)) +
+  geom_histogram(bins = 5, color = "white")
+```
+
+##### Aqui importamos os dados de germinação de esporos de diferentes isolados sob diferentes doses de tratamento, depois calculamos a média de germinação por isolado e dose e visualizamos os resultados com gráficos de dispersão e linhas. Selecionamos o isolado FGT43 e ajustamos um modelo não linear com o pacote drc, estimando a EC50 e visualizando o ajuste. Em seguida, utilizamos o pacote ec50estimator para estimar a EC50 de todos os isolados ao mesmo tempo, por estado. Por fim, apresentamos os resultados em gráfico de pontos ordenados e histograma das EC50s para avaliar a variabilidade entre os isolados.

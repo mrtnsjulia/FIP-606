@@ -1,0 +1,220 @@
+# Importação, Manipulação e Visualização de Dados com o R
+
+Nesta aula, são apresentados diferentes métodos para importar, visualizar, manipular e representar graficamente dados a partir de diversas fontes, incluindo arquivos do Excel (com extensões .xlsx e .xls), arquivos no formato `.csv` e planilhas hospedadas no Google Sheets.
+
+### Arquivos Excel
+
+Para importar uma planilha do Excel com múltiplas abas, utiliza-se a função `read_excel()` do pacote `readxl`. O arquivo deve estar na mesma pasta do seu projeto.
+
+```{r}
+library(readxl)
+library(tidyverse)
+dados <-read_excel("dados-diversos.xlsx")
+dados
+str(dados)
+glimpse(dados)
+```
+
+Para acessar uma aba específica (neste caso, a terceira planilha do arquivo), é usado o argumento `sheet`:
+
+```{r}
+dados2 <- read_excel("dados-diversos.xlsx",
+                    sheet = 2)
+dados2 <- dados2 |>
+  mutate(dose = as.numeric(dose)) #Convertendo a coluna dose para formato numérico
+str(dados2)
+glimpse(dados2)
+```
+
+### Leitura e Escrita de Arquivos CSV e Excel
+
+É possível ler um arquivo `.csv` com a função `read_csv` e, em seguida, exportá-lo para o formato `.xlsx`, utilizando a função `write_xlsx` do pacote `writexl` .
+
+```{r}
+curve <- read_csv("curve.csv")
+
+library(writexl)
+write_xlsx(curve, "curva2.xlsx")
+```
+
+### Importação de Dados a partir do Google Sheets
+
+Dados armazenados em planilhas do Google podem ser importados diretamente por meio do pacote `gsheet`:
+
+```{r}
+library(gsheet)
+dados_nuvem <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?pli=1&gid=373270992#gid=373270992")
+view(dados_nuvem) #possibilita a visualização dos dados
+```
+
+## Filtragem, Agrupamento e Contagem
+
+É possível realizar **filtragem**, **agrupamento** e **contagem** de dados no R de forma simples e eficiente utilizando a combinação das funções `filter()`, `group_by()` e `count()` do pacote `dplyr`.
+
+Para ilustrar essas operações, será utilizado o conjunto de dados `survey`, importado diretamente de uma planilha do Google Sheets, contendo informações sobre espécies, resíduos e estados brasileiros ao longo dos anos.
+
+```{r}
+survey <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?pli=1&gid=1118819738#gid=1118819738")
+view(survey)
+```
+
+### Agrupamento e contagem
+
+A função `group_by()` organiza os dados em grupos com base em uma ou mais variáveis. Em seguida, `count()` contabiliza quantas observações existem em cada grupo.
+
+No exemplo a seguir, agrupa-se o conjunto `survey` por `state` e `residue`, contando o número de registros de cada tipo de resíduo por estado:
+
+```{r}
+survey |>
+  group_by(state, residue) |>
+  count()
+```
+
+### Filtragem de dados
+
+A função `filter()` permite selecionar apenas as linhas que atendem a uma condição específica. Por exemplo, para obter apenas os registros do estado do **Rio Grande do Sul (RS)** e do **Paraná (PR)**:
+
+```{r}
+RS <- survey |>
+  filter(state== "RS")
+PR <- survey |>
+  filter(state== "PR")
+```
+
+Esses dois subconjuntos podem ser combinados em um único conjunto de dados utilizando `rbind()`:
+
+```{r}
+combinado <- rbind(RS, PR)
+```
+
+### Seleção de colunas e filtragem por ano
+
+É possível selecionar apenas algumas colunas para facilitar análises específicas. Por exemplo, para trabalhar apenas com as colunas `year`, `state` e `species` pela função `dplyr::select`
+
+```{r}
+survey_b <- survey |>
+  dplyr::select(year, state, species)
+
+survey_b2009 <- survey |>
+  dplyr::select(year, state, species) |>
+  filter(year==2009)
+```
+
+### Tabela de frequência cruzada
+
+Para verificar quantas vezes cada espécie foi registrada em cada ano, é possível gerar uma tabela de frequência cruzada utilizando a função `tabyl()` do pacote `janitor` .
+
+```{r}
+library(janitor)
+survey_b |>
+  tabyl(year, species)
+```
+
+# Visualização de Dados com `ggplot2`
+
+Os pacotes `tidyverse`, `ggplot2` e `ggthemes` serão usados para criar visualizações gráficas eficientes, permitindo uma análise rápida dos dados carregados no dataframe. A seguir, serão apresentados exemplos de gráficos aplicados ao conjunto de dados `survey_b`.
+
+## Visualização de Dados Categóricos com `ggplot2`
+
+### Gráfico de barras por espécie
+
+```{r}
+survey_b |>
+  group_by(year, species) |>
+  count() |>
+  ggplot(aes(species, n)) +
+  geom_col()
+```
+
+Agrupa os dados por `year` e `species`, conta o número de ocorrências e gera um gráfico de colunas com o número total de registros por espécie. Os anos estão combinados em um único painel.
+
+### Gráfico de barras por ano
+
+```{r}
+survey_b |>
+  group_by(year, species) |>
+  count() |>
+  ggplot(aes(year, n)) +
+  geom_col()
+```
+
+### Facetamento por ano
+
+```{r}
+survey_b |>
+  group_by(year, species) |>
+  count() |>
+  ggplot(aes(species, n)) +
+  geom_col() +
+  facet_wrap(~year)
+```
+
+A função `facet_wrap` permite dividir um gráfico em múltiplos painéis, cada um representando um subconjunto dos dados baseado em uma variável categórica, no caso do exemplos os anos.
+
+### Gráfico colorido por espécie
+
+```{r}
+survey_b |>
+  group_by(year, species) |>
+  count() |>
+  ggplot(aes(year, n, fill = species)) +
+  geom_col() +
+  scale_fill_manual(values = c("red", "purple"))
+```
+
+## Gráficos de Boxplot para Dados Quantitativos
+
+Além de categorias, também podemos visualizar **dados contínuos**. A seguir, criam-se gráficos para variáveis numéricas utilizando boxplots, que mostram a mediana, quartis e possíveis outliers.
+
+### Boxplot com dados do experimento com magnésio
+
+Os dados utilizados neste gráfico foram importados da planilha online. O conjunto `mg` contém informações sobre o comprimento de lesões sob diferentes tratamentos com magnésio.
+
+```{r}
+mg <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?pli=1&gid=983033137#gid=983033137")
+view(mg)
+
+library(ggthemes)
+plot_mg <- mg |>
+  ggplot(aes(trat, comp))+
+  geom_boxplot(fill = "grey", outlier.color = NA)+
+  geom_jitter(width = 0.1, color = "gray50")+
+  scale_y_continuous(limits = c(0,20))+
+  labs(x= "Tratamento",
+       y= "Comprimento (mm)")
+```
+
+Cada tratamento é representado em um boxplot. Pontos individuais são sobrepostos com `geom_jitter()`, o que ajuda a visualizar a dispersão dos dados.
+
+### Boxplot com taxa de crescimento micelial (tcm)
+
+Os dados foram obtidos da planilha online. A variável tcm representa a taxa de crescimento micelial de diferentes espécies. O gráfico abaixo mostra a comparação entre essas espécies:
+
+```{r}
+micelial <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?pli=1&gid=959387827#gid=959387827")
+view(micelial)
+
+plot_micelial <- micelial |>
+ ggplot(aes(reorder(especie, tcm), tcm))+
+  geom_boxplot(outlier.color = NA)+
+  geom_jitter(width = 0.1, color = "gray50")+
+  coord_flip()+
+  labs(x= "", y= "Taxa de crescimento micelial (mm/dia)")+
+  theme_minimal()
+```
+
+### Combinação de Gráficos com `patchwork`
+
+Os dois gráficos anteriores (magnésio e micélio) podem ser combinados em um único painel com o auxílio do pacote `patchwork`:
+
+```{r}
+library(patchwork)
+(plot_mg | plot_micelial) +
+  plot_annotation(tag_levels = "a")
+```
+
+Por fim, os gráficos que foram gerados podem ser salvos utilizando a função `ggsave`. Essa função salva apenaso ultimo grafico gerado.
+
+```{r}
+ggsave("box.png", bg = "white", width = 5, height = 5)
+```

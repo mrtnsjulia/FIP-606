@@ -1,0 +1,442 @@
+# Testes Estatísticos: Comparando Grupos no R
+
+Nesta aula, vamos aprender a aplicar os principais testes estatísticos usados para comparar grupos. Também vamos entender os **pressupostos de normalidade e homogeneidade de variância**, e o que fazer **quando esses pressupostos não são atendidos**. A análise é acompanhada de visualizações gráficas com o `ggplot2`.
+
+### Teste t para comparação de dois grupos independentes
+
+Serão utilizados os dados disponibilizados online na planilha `dat_mg`, que comparam o comprimento de lesões foliares sob dois tratamentos: controle e Mg2 (aplicação de magnésio), por meio da função `t.test`, nativa do R.
+
+```{r}
+library(gsheet)
+dat_mg <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?gid=983033137#gid=983033137")
+```
+
+Antes de realizar testes, é sempre recomendado **explorar visualmente os dados**:
+
+```{r}
+library(ggplot2)
+ggplot(dat_mg, aes(trat, comp)) +
+  geom_jitter(width = 0.1)
+```
+
+O gráfico de dispersão permite visualizar que há uma diferença aparente entre os grupos, mas essa diferença precisa ser confirmada por meio de um teste estatístico. Para isso, os dados serão reorganizados no formato **largo** (wide), estrutura exigida por algumas funções do R, como o `t.test()`, quando os grupos estão em colunas separadas.
+
+```{r}
+library(dplyr)
+library(tidyverse)
+dat_mg2 <- dat_mg |>
+  pivot_wider(names_from = trat, values_from= comp)|>
+  dplyr::select(-rep)
+```
+
+O **teste t** é utilizado para comparar as médias de dois grupos. No exemplo abaixo, comparamos `control` e `Mg2`.
+
+```{r}
+attach(dat_mg2)
+t.test(Mg2, control)
+t.test(control, Mg2)
+t.resultes <-t.test(control, Mg2, var.equal = FALSE)
+```
+
+Para tornar a interpretação do teste t mais acessível e descritiva, podemos utilizar o pacote `report`, que gera um resumo textual claro dos principais achados do teste. Isso facilita a comunicação dos resultados, especialmente em relatórios e apresentações.
+
+```{r}
+library(report)
+t.resultes <-t.test(control, Mg2, var.equal = FALSE)
+report(t.resultes)
+```
+
+#### **Verificação das premissas**
+
+Para garantir a confiabilidade do teste realizado, é importante verificar se os dados atendem a certas premissas, como a normalidade dos grupos e a homogeneidade das variâncias entre eles.
+
+#### Teste de normalidade
+
+-   **Histograma**
+
+O histograma permite avaliar visualmente se a normalidade é atendida nos dados. Os histogramas mostram a forma da distribuição dos dados. Buscamos uma forma aproximadamente simétrica e em sino (distribuição normal).
+
+```{r}
+hist(dat_mg2$control)
+hist(dat_mg2$Mg2)
+```
+
+-   **Shapiro-Wilk**
+
+Esse é o teste formal mais usado para verificar se uma variável segue distribuição normal. Nesse caso, será aplicada a função `shapiro.test` (nativa do R):
+
+```{r}
+shapiro.test(dat_mg2$control)
+```
+
+```{r}
+shapiro.test(dat_mg2$Mg2)
+```
+
+O teste de Shapiro-Wilk retorna um valor-p. Se **p \> 0,05**, não há evidência contra a normalidade. Ou seja, os dados são considerados normalmente distribuídos.
+
+#### Teste de homogeneidade
+
+Para avaliar a homogeneidade entre as variantes será utilizada a função `var.test` :
+
+```{r}
+var.test(dat_mg2$control, dat_mg2$Mg2)
+```
+
+O teste de homogeneidade de variâncias também não rejeita a hipótese nula, pois o valor de **p \> 0,05**, indicando que os tratamentos apresentam variâncias semelhantes.
+
+Dessa forma, considerando a normalidade e a homogeneidade de variâncias, é possível confiar nos resultados obtidos pelo teste t.
+
+#### Teste t com `rstatix` e visualização com `ggpubr`
+
+Além do `t.test()` nativo do R, podemos usar funções do pacote `rstatix`, que facilitam a realização de testes estatísticos com **sintaxe mais intuitiva** e integração com visualizações do `ggpubr`.
+
+```{r}
+library(rstatix)
+test <- t_test(comp ~ trat, data = dat_mg)
+```
+
+Aqui estamos comparando a variável `comp` entre os níveis da variável `trat`. O objeto `test` guarda os resultados, incluindo o valor de p e o intervalo de confiança.
+
+Para facilitar a interpretação visual do teste estatístico, podemos utilizar um gráfico do tipo boxplot com o pacote `ggpubr`.
+
+```{r}
+library(ggpubr)
+p <- ggboxplot(
+  dat_mg, x = "trat", y="comp",
+  color = "trat", palette = "jco")
+```
+
+### Teste t pareado
+
+Utilizado quando os dois grupos estão relacionados, como medidas feitas antes e depois de um tratamento nos mesmos indivíduos.
+
+Aqui usaremos esse teste ao comparar a acurácia de diagnósticos com (`Aided1`) e sem (`Unaided`) suporte, onde a mesma pessoa foi avaliada nas duas condições com o objetivo de verificar se houve diferença significativa entre os dois momentos.
+
+```{r}
+escala <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?gid=1729131173#gid=1729131173")
+view(escala)
+```
+
+O boxplot será gerado para a visualiação rápida dos dados
+
+```{r}
+escala |> 
+  ggplot(aes(assessment, acuracia))+
+  geom_boxplot()
+```
+
+Seguidamente, foram criados dois vetores separados, um para cada grupo que será comparado. No exemplo a seguir, vamos comparar a acurácia das avaliações feitas **sem auxílio (Unaided)** e **com auxílio (Aided1)**. Para isso, extraímos os valores de cada grupo da seguinte forma:
+
+```{r}
+unaided <- escala |> 
+  filter(assessment == "Unaided") |> 
+  select(acuracia)  |> 
+  pull ()
+
+aiaded <- escala |> 
+  filter(assessment == "Aided1") |> 
+  select(acuracia)  |> 
+  pull ()
+```
+
+#### Verificação das premissas
+
+Antes de aplicar o teste t, devemos checar duas premissas:
+
+#### **Normalidade dos dados**
+
+Utilizamos o teste de Shapiro-Wilk para verificar se os dados de ambos os grupos seguem uma distribuição normal:
+
+```{r}
+shapiro.test(unaided)
+```
+
+```{r}
+shapiro.test(aiaded)
+```
+
+A variável `unaided` possui uma distribuição não normal, já que o p \< 0,05. Já a variável `aiaded` possui uma distribuição normal, com p \> 0,05.
+
+#### **Homogeneidade das variâncias**
+
+Embora o teste t pareado seja menos sensível a isso, ainda podemos usar o `var.test` para avaliar:
+
+```{r}
+var.test(unaided, aiaded)
+```
+
+Os resultados do teste apontam que os grupos têm variâncias significativamente diferentes, já que o valor de p \< 0,05.
+
+```{r}
+t.test(unaided, aiaded, paired = TRUE,
+       var.equal = FALSE)
+```
+
+Como as premissas do teste t foram violadas, a melhor alternativa é usar o teste de Wilcoxon pareado, que é não paramétrico e não exige normalidade nem igualdade de variância.
+
+#### **Teste de Wilcoxon**
+
+```{r}
+wilcox.test(unaided, aiaded, paired = FALSE)
+```
+
+Como os grupos apresentaram valores repetidos, o R emitiu um aviso informando que o **p-valor exato** não pôde ser calculado devido a empates. Ainda assim, o resultado do teste foi computado com **correção de continuidade**, retornando um **p-valor de 0.00018**, indicando **diferença estatística significativa** entre os grupos avaliados.
+
+### Análise de variância (ANOVA)
+
+Esse teste estatístico avalia se existem diferenças significativas entre as médias de três ou mais grupos. Para realizar esse teste utilizaremos o banco de dados `micelial`, importado diretamente do Google Sheets, que contém informações sobre o crescimento micelial (em mm/dia) de diferentes espécies de fungos.
+
+```{r}
+micelial <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?gid=959387827#gid=959387827")
+view(micelial)
+```
+
+Para verificar a distribuição dos valores de crescimento por espécie, utilizamos um boxplot com pontos de dispersão:
+
+```{r}
+micelial |> 
+  ggplot(aes(especie, tcm))+
+  geom_boxplot(outlier.colour = NA)+
+  geom_jitter(width = 0.1)
+```
+
+Aplicaremos a anova:
+
+```{r}
+anova1 <- aov(tcm ~especie, data = micelial) # Ajusta um modelo de ANOVA (análise de variância) clássico
+anova2 <- lm(tcm ~especie, data = micelial) # Ajusta um modelo linear (lm = linear model), equivalente à ANOVA
+anova(anova1)
+anova(anova2)
+```
+
+O valor de p = 2.028e-07 (muito menor que 0,05) indica que há diferença significativa entre as médias das espécies.
+
+-   Como a ANOVA indica que existem diferenças significativas entre os grupos, o próximo passo fundamental é verificar se os dados atendem às premissas necessárias para a validade desse teste, ou seja, a normalidade dos resíduos e a homogeneidade das variâncias. Vamos então realizar essas checagens para garantir a confiabilidade dos resultados.
+
+#### Checagem das premissas da ANOVA
+
+-   **Histograma:**
+
+```{r}
+hist(residuals(anova1))
+```
+
+-   **Normalidade de variâncias:**
+
+```{r}
+shapiro.test(residuals(anova1))
+```
+
+-   **Homogeneidade de variâncias:**
+
+```{r}
+bartlett.test(tcm ~ especie, data = micelial) # Mais sensível a desvios da normalidade
+install.packages("rstatix")  # se ainda não tiver instalado
+library(rstatix)
+levene_test(tcm ~ especie, data = micelial) # Mais robusto à não normalidade)
+```
+
+Diante dos resultados obtidos, podemos concluir que os dados apresentam normalidade dos resíduos (p \> 0,05) e homogeneidade de variâncias (p \> 0,05) o que valida o uso da ANOVA paramétrica para comparar as médias de crescimento micelial entre as diferentes espécies.
+
+Apesar da ANOVA indicar que **há diferença significativa entre os grupos**, ela **não informa entre quais grupos essas diferenças ocorrem**.
+
+Para isso, realizaremos agora as **comparações múltiplas** usando a função `emmeans()` (médias ajustadas) e `cld()` para visualizar quais grupos são significativamente diferentes entre si.
+
+#### Comparações múltiplas (post-hoc)
+
+Primeiro, estimamos as médias ajustadas (ou médias marginais) para cada grupo da variável `especie`.
+
+Com essas médias, conseguimos visualizar o comportamento geral de cada grupo e, em seguida, aplicar testes de comparações múltiplas para identificar quais grupos diferem estatisticamente entre si.
+
+```{r}
+library(emmeans)
+m <- emmeans(anova2, ~especie)
+m
+```
+
+Agora que temos as médias ajustadas, podemos realizar as comparações entre os grupos para verificar quais espécies apresentam diferenças estatísticas significativas.\
+
+Vamos utilizar a função `cld()` do pacote **`multcompView`**, juntamente com as funções `pairs()` e `cld()` do pacote **`emmeans`**, para realizar e visualizar as comparações múltiplas entre os grupos.
+
+```{r}
+ micelial <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?gid=959387827#gid=959387827")
+  
+  micelial |> 
+    ggplot(aes(especie, tcm))+
+    geom_boxplot(outlier.colour = NA)+
+    geom_jitter(width = 0.1)
+  
+
+  anova1 <- aov(tcm ~ especie, data = micelial)
+  anova1 
+  anova(anova1)
+  
+  anova2 <- lm(tcm ~ especie, data = micelial)
+    anova(anova2)
+ 
+    residuals(anova1) 
+hist(residuals(anova1))
+shapiro.test(residuals(anova1)) 
+    
+  
+
+    bartlett.test(tcm ~ especie, data = micelial)
+    
+   
+    levene_test(tcm ~especie, data = micelial)
+    
+
+    
+  library(emmeans)
+   
+      m <- emmeans(anova2, ~ especie)
+  m 
+  
+
+  library(multcomp)
+  library(multcompView)
+  
+  
+  cld(m)
+
+ pwpm(m) 
+ 
+ pairs(m) 
+```
+
+`
+
+A partir dos resultados, os grupos foram agrupados em uma tabela para facilitar a visualização das espécies que apresentam diferenças estatisticamente significativas.
+
+| Espécie | Média Ajustada (`emmean`) | Grupo (letra) |
+|---------|---------------------------|---------------|
+| Fgra    | 0.912                     | A             |
+| Faus    | 1.237                     | B             |
+| Fcor    | 1.322                     | B             |
+| Fmer    | 1.427                     | BC            |
+| Fasi    | 1.572                     | C             |
+
+Com um nível de significância de 5%, interpretamos que a espécie Fgra apresenta a menor taxa de crescimento em comparação com as demais. As espécies Faus, Fcor e Fmer possuem taxas de crescimento estatisticamente semelhantes entre si. Além disso, Fmer e Fasi também não diferem estatisticamente e apresentam as maiores taxas de crescimento.
+
+#### Testes alternativos à ANOVA: Transformações e métodos não paramétricos
+
+Para exemplificar estratégias analíticas em situações em que as **premissas da ANOVA não são atendidas**, utilizaremos um conjunto de dados chamado `InsectSprays`, disponível no próprio R. Esse conjunto simula a contagem de insetos após aplicação de diferentes tipos de pulverizações (sprays).
+
+```{r}
+insetos <- InsectSprays
+```
+
+Para visualização dos dados, será construído um gráfico boxplots com pontos.
+
+```{r}
+insetos |>
+  ggplot(aes(spray, count))+
+  geom_boxplot(outlier.color = NA)+
+  geom_jitter(width = 0.1)
+```
+
+O boxplot mostra uma comparação entre os grupos (tipos de spray). No entanto, antes de aplicar um teste paramétrico, precisamos verificar se os dados seguem distribuição normal e possuem homogeneidade de variâncias. Ajustaremos um modelo linear com os dados e esse modelo será usado para verificar se atendem às premissas da ANOVA.
+
+-   **Histograma:**
+
+```{r}
+m2 <- lm(count ~ spray, data = insetos)
+hist(residuals(m2))
+```
+
+-   **Normalidade de variâncias:**
+
+```{r}
+shapiro.test(residuals(m2)) 
+```
+
+-   **Homogeneidade de variâncias:**
+
+```{r}
+bartlett.test(count ~ spray, data = insetos)
+```
+
+-   **Verificação visual da normalidade dos resíduos com gráfico QQ-plot:**
+
+```{r}
+qqnorm(residuals(m2))     # Plota os resíduos esperados vs. observados
+qqline(residuals(m2))     # Adiciona a linha de referência da normalidade
+```
+
+Os resultados indicam que os resíduos não seguem uma distribuição normal (p \< 0,05) e que as variâncias entre os grupos não são homogêneas (p \< 0,05), configurando uma violação das premissas da ANOVA. Essa falta de normalidade e homogeneidade também é evidenciada visualmente pelo gráfico QQ-plot e pelo histograma dos resíduos, que mostram desvios significativos da distribuição normal.
+
+Diante disso, duas abordagens alternativas podem ser adotadas:
+
+### Transformar a variável resposta
+
+Uma forma de contornar a violação das premissas é transformar a variável resposta (`count`) em `ranks`, substituindo os valores originais pela sua posição ordenada. Essa abordagem diminui a influência das distribuições não normais nos resultados da análise.
+
+```{r}
+m3 <- lm(rank(count) ~spray, data = insetos)
+```
+
+Agora vamos verificar se essa abordagem foi eficaz
+
+-   **Histograma:**
+
+```{r}
+hist(residuals(m3))
+```
+
+-   **Normalidade de variâncias:**
+
+```{r}
+shapiro.test(residuals(m3))
+```
+
+-   **Homogeneidade de variâncias:**
+
+```{r}
+bartlett.test(residuals(m3) ~ spray, data = insetos)
+```
+
+-   **Verificação visual da normalidade dos resíduos com gráfico QQ-plot:**
+
+```{r}
+qqnorm(residuals(m3))
+qqline(residuals(m3))
+```
+
+Após a transformação os resultados indicam que os resíduos **seguem uma distribuição normal** e **homogênea** (p \> 0,05) ), atendendo às premissas da ANOVA. Essa adequação é reforçada pelo **histograma dos resíduos**, que apresenta forma simétrica, e do **gráfico QQ-plot**, que mostra os pontos alinhados à linha teórica, sugerindo aderência à normalidade. Assim, os pressupostos estatísticos estão satisfeitos, e a ANOVA pode ser aplicada com segurança para testar diferenças entre os grupos.
+
+```{r}
+anova(m3)
+```
+
+A ANOVA com dados transformados por postos mostrou diferença significativa entre os grupos (F = 44.266, p \< 0,001), indicando que pelo menos um tratamento difere dos outros.
+
+Agora, para identificar quais grupos apresentam diferenças significativas após a ANOVA, utilizamos as comparações múltiplas com o pacote **`emmeans`**.
+
+```{r}
+m33 <- emmeans(m3, ~ spray, type = "response")
+cld(m33)
+plot(m33)
+
+```
+
+Os resultados mostram que os grupos se dividem em três conjuntos estatisticamente diferentes: o grupo C apresenta a menor média de resposta (11,5), seguido pelos grupos E e D com médias intermediárias (19,3 e 25,6), e os grupos A, B e F com as maiores médias (52,2; 54,8 e 55,6). Isso indica que A, B e F não diferem entre si, mas são significativamente diferentes dos demais grupos, enquanto D e E formam um grupo intermediário distinto de C e dos grupos com maiores respostas.
+
+### Testes não paramétricos
+
+Quando os dados continuam não atendendo às premissas, mesmo com transformações, utilizamos um teste não paramétrico. Nesse caso, aplicamos o teste de Kruskal-Wallis, uma alternativa à ANOVA para dados sem distribuição normal e/ou com variâncias heterogêneas.
+
+```{r}
+kruskal.test(count ~ spray, data = insetos)
+```
+
+Há diferença significativa entre pelo menos dois grupos de `spray` em relação ao número de insetos (`count`), com um valor de p \< 0,05.
+
+#### Outras formas de aplicar o teste com pacotes adicionais
+
+Com o pacote `rstatix` (para análises modernas e integração com `ggplot2`):
+
+```{r}
+library(rstatix)
+kruskal_test(insetos, count ~ spray)
+```

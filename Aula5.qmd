@@ -1,0 +1,111 @@
+## Aula 5
+
+Pacotes utilizados nessa aula
+
+```{r}
+library(gsheet)
+library(ggplot2)
+library(readxl)
+library(tidyverse)
+library(Hmisc)
+library(multcomp)
+library(emmeans)
+```
+
+```{r}
+campo <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?gid=866852711#gid=866852711")
+view(campo)
+campo |> 
+  ggplot(aes(TRAT, PROD))+
+  geom_jitter(width = 0.1)+
+  stat_summary(
+    fun.data = "mean_cl_boot",
+    colour="red", width = 0.3)
+
+campo$TRAT <- factor (campo$TRAT)
+campo$BLOCO <- factor (campo$BLOCO)
+
+m_campo <- lm(PROD ~ BLOCO + TRAT, data = campo)
+m_campo
+anova(m_campo)
+
+
+means_campo <- emmeans(m_campo, ~ TRAT)
+means_campo
+plot(means_campo)
+
+library(multcomp)
+cld(means_campo)
+
+
+m_campo <- lm(log(FER) ~ BLOCO + TRAT, data = campo)
+m_campo
+anova(m_campo)
+
+library(DHARMa)
+plot(simulateResiduals(m_campo))
+
+
+means_campo <- emmeans(m_campo, ~ TRAT, type = "response")
+means_campo
+plot(means_campo)
+
+library(multcomp)
+cld(means_campo)
+pwpm(means_campo)
+```
+
+##### Aqui nós importamos os dados da planilha compartilhada pelo professor, depois visualizamos os dados usando um gráfico de dispersão com intervalos de confiança, o que mostra as diferenças de produtividade e entre os tratamentos. Convertemos as variáveis TRAT e BLOCO em fatores e, em seguida, ajustamos a ANOVA usando lm(PROD \~ BLOCO + TRAT) para avaliar o efeito dos tratamentos, considerando os blocos como fator de controle. Aplicamos a função anova() para verificar a significância das diferenças.
+
+##### Utilizamos o pacote emmeans para estimar as médias ajustadas dos tratamentos e o cld() para realizar comparações múltiplas, identificando quais tratamentos diferem entre si estatisticamente. Depois avaliamos a variável FER, e ela não atendeu aos pressupostos do modelo, aplicamos uma transformação logarítmica. Ajustamos novamente o modelo e usamos o pacote DHARMa para verificar os resíduos simulados. E terminamos calculando as médias ajustadas transformadas de volta à escala original (type = "response") e realizamos novas comparações com cld() e pwpm(), para verificar quais tratamentos apresentaram diferenças significativas em relação à fertilidade.
+
+```{r}
+milho <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1bq2N19DcZdtax2fQW9OHSGMR0X2__Z9T/edit?gid=1345524759#gid=1345524759")
+view(milho)
+
+milho |> 
+  ggplot(aes(hybrid, index, color = method))+
+  geom_jitter(width = 0.1)+
+  coord_flip()
+
+
+milho$hybrid_block <- interaction(milho$hybrid, milho$block)
+
+library(dplyr)
+milho |> 
+  mutate(hybrid_block = interaction(hybrid, block))
+
+library(DHARMa)
+library(lme4)
+m_milho <- lmer(index ~ hybrid*method + 
+                  (1 | block:hybrid_block),
+                data = milho)
+car::Anova(m_milho)
+plot(simulateResiduals(m_milho))
+
+library(multcomp)
+media_milho <- emmeans(m_milho, ~ hybrid | method)
+cld (media_milho, Letters = letters)
+
+m_milho3 <- lmer(yield ~ hybrid*method + 
+                  (1 | block:hybrid_block),
+                data = milho)
+car::Anova(m_milho3)
+plot(simulateResiduals(m_milho3))
+```
+
+##### Aqui Importamos os dados do experimento com milho e visualizamos a variável index por híbrido e método. Criamos a variável hybrid_block para representar a interação entre híbrido e bloco, usada na modelagem mista com lmer(), considerando index como resposta e block:hybrid_block como efeito aleatório. Avaliamos os resíduos simulados com o pacote DHARMa e, com emmeans, estimamos as médias ajustadas dos híbridos por método, comparando-as com cld(). Repetimos o processo para a variável yield, ajustando novo modelo misto e verificando a qualidade do ajuste da mesma forma.
+
+```{r}
+library(ggplot2)
+milho |> 
+  ggplot(aes(index,  yield))+
+  geom_point()+
+  geom_smooth(method = "lm")
+
+cor1 <- cor.test(milho$index, milho$yield)
+R2_percentual <- (cor1$estimate)^2 * 100
+R2_percentual*100
+```
+
+##### Aqui criamos um gráfico de dispersão com linha de tendência linear entre index e yield. Em seguida, calculamos a correlação entre as duas variáveis e obtivemos o R² percentual, que indica o quanto index explica a variação em yield.
